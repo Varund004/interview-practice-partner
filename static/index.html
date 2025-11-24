@@ -126,7 +126,47 @@
                     <span id="timer">00:00</span>
                 </div>
             </div>
-            <button id="endInterview" class="btn btn-danger">End Interview</button>
+            <div class="voice-controls">
+                <button id="toggleVoice" class="btn-icon" title="Toggle AI Voice">
+                    <svg id="voiceIcon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                </button>
+                <button id="voiceSettings" class="btn-icon" title="Voice Settings">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6m0-18l-2 2m2-2l2 2m-2 16l-2-2m2 2l2-2M1 12h6m6 0h6M1 12l2-2m-2 2l2 2m16-2l2-2m-2 2l2 2"></path>
+                    </svg>
+                </button>
+                <button id="endInterview" class="btn btn-danger">End Interview</button>
+            </div>
+        </div>
+
+        <!-- Voice Settings Modal -->
+        <div id="voiceSettingsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h3>🎤 Voice Settings</h3>
+                <div class="form-group">
+                    <label>AI Voice Gender:</label>
+                    <select id="voiceGender">
+                        <option value="female">Female (Indian English)</option>
+                        <option value="male">Male (Indian English)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Speech Rate:</label>
+                    <input type="range" id="speechRate" min="0.5" max="2" step="0.1" value="1">
+                    <span id="rateValue">1x</span>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autoPlay" checked>
+                        Auto-play AI responses
+                    </label>
+                </div>
+                <button id="closeSettings" class="btn btn-primary">Done</button>
+            </div>
         </div>
 
         <div class="chat-container" id="chatContainer">
@@ -137,18 +177,29 @@
             <div class="input-wrapper">
                 <textarea 
                     id="userInput" 
-                    placeholder="Type your answer here..." 
+                    placeholder="Type your answer here... or use the microphone 🎤" 
                     rows="6"
                 ></textarea>
-                <button id="sendMessage" class="btn btn-primary">
-                    Send
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="22" y1="2" x2="11" y2="13"></line>
-                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                </button>
+                <div class="button-group">
+                    <button id="micButton" class="btn btn-mic" title="Click to speak">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                        <span id="micText">Speak</span>
+                    </button>
+                    <button id="sendMessage" class="btn btn-primary">
+                        Send
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
             </div>
-            <div class="input-hint">Press Enter to send, Shift+Enter for new line</div>
+            <div class="input-hint" id="inputHint">Press Enter to send, Shift+Enter for new line • Click 🎤 to speak</div>
         </div>
     </div>
 
