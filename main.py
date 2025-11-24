@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import os
@@ -25,7 +25,15 @@ app.add_middleware(
 )
 
 # Initialize Groq client
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+try:
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+except TypeError:
+    # Fallback for Python 3.13 compatibility issues
+    import httpx
+    groq_client = Groq(
+        api_key=os.getenv("GROQ_API_KEY"),
+        http_client=httpx.Client()
+    )
 
 # In-memory session storage
 sessions: Dict[str, dict] = {}
@@ -194,6 +202,11 @@ Keep the feedback constructive, specific, and encouraging. Format it clearly wit
 @app.get("/")
 async def read_root():
     return FileResponse("static/index.html")
+
+@app.get("/favicon.ico")
+async def favicon():
+    # Return a simple response or redirect
+    return Response(status_code=204)  # No Content
 
 @app.get("/api/roles")
 async def get_roles():
