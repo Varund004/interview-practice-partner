@@ -5,6 +5,19 @@ let startTime = null;
 let roles = {};
 let conversationHistory = [];
 
+// Voice Recognition
+let recognition = null;
+let isRecording = false;
+
+// Text-to-Speech
+let speechSynthesis = window.speechSynthesis;
+let currentUtterance = null;
+let voiceEnabled = true;
+let autoPlayEnabled = true;
+let selectedVoiceGender = 'female';
+let speechRate = 1.0;
+let availableVoices = [];
+
 // DOM Elements
 const landingPage = document.getElementById('landing-page');
 const interviewPage = document.getElementById('interview-page');
@@ -28,6 +41,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadRoles();
     setupEventListeners();
     setDefaultDateTime();
+    initVoiceRecognition();
+    initTextToSpeech();
 });
 
 // Load available roles
@@ -57,6 +72,36 @@ function setupEventListeners() {
     addToCalendarBtn.addEventListener('click', addToGoogleCalendar);
     sendMessageBtn.addEventListener('click', sendMessage);
     endInterviewBtn.addEventListener('click', endInterview);
+    
+    // Voice controls
+    if (document.getElementById('micButton')) {
+        document.getElementById('micButton').addEventListener('click', toggleRecording);
+    }
+    if (document.getElementById('toggleVoice')) {
+        document.getElementById('toggleVoice').addEventListener('click', toggleVoice);
+    }
+    if (document.getElementById('voiceSettings')) {
+        document.getElementById('voiceSettings').addEventListener('click', openVoiceSettings);
+    }
+    if (document.getElementById('closeSettings')) {
+        document.getElementById('closeSettings').addEventListener('click', closeVoiceSettings);
+    }
+    if (document.getElementById('voiceGender')) {
+        document.getElementById('voiceGender').addEventListener('change', (e) => {
+            selectedVoiceGender = e.target.value;
+        });
+    }
+    if (document.getElementById('speechRate')) {
+        document.getElementById('speechRate').addEventListener('input', (e) => {
+            speechRate = parseFloat(e.target.value);
+            document.getElementById('rateValue').textContent = speechRate + 'x';
+        });
+    }
+    if (document.getElementById('autoPlay')) {
+        document.getElementById('autoPlay').addEventListener('change', (e) => {
+            autoPlayEnabled = e.target.checked;
+        });
+    }
     
     // Enter key to send message
     userInput.addEventListener('keydown', (e) => {
@@ -217,6 +262,16 @@ function addMessage(role, content) {
     
     chatContainer.appendChild(messageDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    // Add play button for AI messages
+    if (role === 'ai') {
+        addPlayButton(messageDiv, content);
+        
+        // Auto-play if enabled
+        if (autoPlayEnabled && voiceEnabled) {
+            speakText(content, true);
+        }
+    }
 }
 
 // Send message
@@ -354,4 +409,266 @@ function escapeHtml(text) {
 // Utility: Show error
 function showError(message) {
     alert(message);
+}
+
+// ========== VOICE RECOGNITION ==========
+
+function initVoiceRecognition() {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-IN'; // Indian English
+        
+        recognition.onstart = () => {
+            isRecording = true;
+            const micBtn = document.getElementById('micButton');
+            const micText = document.getElementById('micText');
+            const hint = document.getElementById('inputHint');
+            
+            if (micBtn) {
+                micBtn.classList.add('recording');
+                micText.textContent = 'Listening...';
+            }
+            if (hint) {
+                hint.textContent = '🎤 Listening... Speak now!';
+                hint.style.color = 'var(--danger-color)';
+            }
+        };
+        
+        recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const transcript = event.results[i][0].transcript;
+                if (event.results[i].isFinal) {
+                    finalTranscript += transcript + ' ';
+                } else {
+                    interimTranscript += transcript;
+                }
+            }
+            
+            // Update textarea with transcript
+            if (finalTranscript) {
+                userInput.value = (userInput.value + ' ' + finalTranscript).trim();
+            } else if (interimTranscript) {
+                // Show interim results
+                const currentValue = userInput.value;
+                userInput.value = (currentValue + ' ' + interimTranscript).trim();
+            }
+        };
+        
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            resetMicButton();
+            
+            if (event.error === 'no-speech') {
+                showError('No speech detected. Please try again.');
+            } else if (event.error === 'not-allowed') {
+                showError('Microphone access denied. Please allow microphone access in browser settings.');
+            } else {
+                showError('Voice recognition error: ' + event.error);
+            }
+        };
+        
+        recognition.onend = () => {
+            resetMicButton();
+        };
+    } else {
+        console.warn('Speech recognition not supported in this browser');
+        const micBtn = document.getElementById('micButton');
+        if (micBtn) {
+            micBtn.disabled = true;
+            micBtn.title = 'Voice input not supported in this browser. Please use Chrome or Edge.';
+        }
+    }
+}
+
+function toggleRecording() {
+    if (!recognition) {
+        alert('Voice recognition is not supported in your browser. Please use Chrome or Edge.');
+        return;
+    }
+    
+    if (isRecording) {
+        recognition.stop();
+    } else {
+        try {
+            recognition.start();
+        } catch (error) {
+            console.error('Error starting recognition:', error);
+            showError('Could not start voice recognition. Please try again.');
+        }
+    }
+}
+
+function resetMicButton() {
+    isRecording = false;
+    const micBtn = document.getElementById('micButton');
+    const micText = document.getElementById('micText');
+    const hint = document.getElementById('inputHint');
+    
+    if (micBtn) {
+        micBtn.classList.remove('recording');
+        micText.textContent = 'Speak';
+    }
+    if (hint) {
+        hint.textContent = 'Press Enter to send, Shift+Enter for new line • Click 🎤 to speak';
+        hint.style.color = '';
+    }
+}
+
+// ========== TEXT-TO-SPEECH ==========
+
+function initTextToSpeech() {
+    // Load available voices
+    function loadVoices() {
+        availableVoices = speechSynthesis.getVoices();
+    }
+    
+    loadVoices();
+    
+    // Chrome loads voices asynchronously
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = loadVoices;
+    }
+}
+
+function getIndianVoice(gender) {
+    // Try to find Indian English voice
+    let voice = availableVoices.find(v => 
+        v.lang.includes('en-IN') && 
+        (gender === 'female' ? v.name.toLowerCase().includes('female') || !v.name.toLowerCase().includes('male') : v.name.toLowerCase().includes('male'))
+    );
+    
+    // Fallback to any Indian English voice
+    if (!voice) {
+        voice = availableVoices.find(v => v.lang.includes('en-IN'));
+    }
+    
+    // Fallback to any English voice
+    if (!voice) {
+        voice = availableVoices.find(v => 
+            v.lang.includes('en') && 
+            (gender === 'female' ? !v.name.toLowerCase().includes('male') : v.name.toLowerCase().includes('male'))
+        );
+    }
+    
+    // Final fallback
+    if (!voice) {
+        voice = availableVoices.find(v => v.lang.includes('en'));
+    }
+    
+    return voice;
+}
+
+function speakText(text, autoPlay = true) {
+    if (!voiceEnabled || !autoPlay) return;
+    
+    // Stop any ongoing speech
+    if (currentUtterance) {
+        speechSynthesis.cancel();
+    }
+    
+    currentUtterance = new SpeechSynthesisUtterance(text);
+    
+    // Set voice
+    const voice = getIndianVoice(selectedVoiceGender);
+    if (voice) {
+        currentUtterance.voice = voice;
+    }
+    
+    currentUtterance.rate = speechRate;
+    currentUtterance.pitch = 1.0;
+    currentUtterance.volume = 1.0;
+    
+    currentUtterance.onend = () => {
+        currentUtterance = null;
+    };
+    
+    currentUtterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
+        currentUtterance = null;
+    };
+    
+    speechSynthesis.speak(currentUtterance);
+}
+
+function toggleVoice() {
+    voiceEnabled = !voiceEnabled;
+    const toggleBtn = document.getElementById('toggleVoice');
+    const voiceIcon = document.getElementById('voiceIcon');
+    
+    if (toggleBtn) {
+        if (voiceEnabled) {
+            toggleBtn.classList.remove('muted');
+            toggleBtn.title = 'Mute AI Voice';
+        } else {
+            toggleBtn.classList.add('muted');
+            toggleBtn.title = 'Unmute AI Voice';
+            speechSynthesis.cancel(); // Stop current speech
+        }
+    }
+    
+    // Update icon
+    if (voiceIcon && !voiceEnabled) {
+        voiceIcon.innerHTML = `
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+        `;
+    } else if (voiceIcon) {
+        voiceIcon.innerHTML = `
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        `;
+    }
+}
+
+function openVoiceSettings() {
+    const modal = document.getElementById('voiceSettingsModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+function closeVoiceSettings() {
+    const modal = document.getElementById('voiceSettingsModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function addPlayButton(messageDiv, text) {
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+    
+    const playBtn = document.createElement('button');
+    playBtn.className = 'btn-play';
+    playBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        <span>Play</span>
+    `;
+    
+    playBtn.onclick = () => {
+        if (speechSynthesis.speaking) {
+            speechSynthesis.cancel();
+            playBtn.classList.remove('playing');
+        } else {
+            playBtn.classList.add('playing');
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voice = getIndianVoice(selectedVoiceGender);
+            if (voice) utterance.voice = voice;
+            utterance.rate = speechRate;
+            utterance.onend = () => playBtn.classList.remove('playing');
+            speechSynthesis.speak(utterance);
+        }
+    };
+    
+    actionsDiv.appendChild(playBtn);
+    messageDiv.appendChild(actionsDiv);
 }
