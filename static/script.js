@@ -8,6 +8,8 @@ let conversationHistory = [];
 // Voice Recognition
 let recognition = null;
 let isRecording = false;
+let finalTranscript = ''; // Store accumulated final transcript
+let startingText = ''; // Store text that was in textarea before recording
 
 // Text-to-Speech
 let speechSynthesis = window.speechSynthesis;
@@ -76,6 +78,12 @@ function setupEventListeners() {
     // Voice controls
     if (document.getElementById('micButton')) {
         document.getElementById('micButton').addEventListener('click', toggleRecording);
+    }
+    if (document.getElementById('clearButton')) {
+        document.getElementById('clearButton').addEventListener('click', () => {
+            userInput.value = '';
+            userInput.focus();
+        });
     }
     if (document.getElementById('toggleVoice')) {
         document.getElementById('toggleVoice').addEventListener('click', toggleVoice);
@@ -420,9 +428,14 @@ function initVoiceRecognition() {
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = 'en-IN'; // Indian English
+        recognition.maxAlternatives = 1;
         
         recognition.onstart = () => {
             isRecording = true;
+            // Store the current text before we start adding voice input
+            startingText = userInput.value;
+            finalTranscript = '';
+            
             const micBtn = document.getElementById('micButton');
             const micText = document.getElementById('micText');
             const hint = document.getElementById('inputHint');
@@ -439,24 +452,24 @@ function initVoiceRecognition() {
         
         recognition.onresult = (event) => {
             let interimTranscript = '';
-            let finalTranscript = '';
             
+            // Process all results
             for (let i = event.resultIndex; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
+                    // Add final transcript (this is what we keep)
                     finalTranscript += transcript + ' ';
                 } else {
+                    // Show interim results (temporary, for visual feedback)
                     interimTranscript += transcript;
                 }
             }
             
-            // Update textarea with transcript
-            if (finalTranscript) {
-                userInput.value = (userInput.value + ' ' + finalTranscript).trim();
-            } else if (interimTranscript) {
-                // Show interim results
-                const currentValue = userInput.value;
-                userInput.value = (currentValue + ' ' + interimTranscript).trim();
+            // Update textarea: starting text + final transcript + interim (preview)
+            if (startingText) {
+                userInput.value = startingText + ' ' + finalTranscript + interimTranscript;
+            } else {
+                userInput.value = (finalTranscript + interimTranscript).trim();
             }
         };
         
@@ -468,12 +481,23 @@ function initVoiceRecognition() {
                 showError('No speech detected. Please try again.');
             } else if (event.error === 'not-allowed') {
                 showError('Microphone access denied. Please allow microphone access in browser settings.');
+            } else if (event.error === 'aborted') {
+                // Just reset, don't show error
+                console.log('Speech recognition aborted');
             } else {
                 showError('Voice recognition error: ' + event.error);
             }
         };
         
         recognition.onend = () => {
+            // When recording ends, finalize the text
+            if (finalTranscript) {
+                if (startingText) {
+                    userInput.value = (startingText + ' ' + finalTranscript).trim();
+                } else {
+                    userInput.value = finalTranscript.trim();
+                }
+            }
             resetMicButton();
         };
     } else {
@@ -506,6 +530,9 @@ function toggleRecording() {
 
 function resetMicButton() {
     isRecording = false;
+    finalTranscript = '';
+    startingText = '';
+    
     const micBtn = document.getElementById('micButton');
     const micText = document.getElementById('micText');
     const hint = document.getElementById('inputHint');
